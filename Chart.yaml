@@ -1,0 +1,23 @@
+apiVersion: v2
+name: nginxpm
+description: >-
+  Nginx Proxy Manager on K3s/Kubernetes — web-based reverse proxy with
+  automatic Let's Encrypt SSL certificate management. Uses built-in SQLite,
+  no external database required.
+type: application
+version: 1.0.0
+appVersion: "latest"
+kubeVersion: ">=1.24.0-0"
+keywords:
+  - nginx
+  - nginx-proxy-manager
+  - reverse-proxy
+  - letsencrypt
+  - ssl
+home: https://github.com/WOOWTECH/Woow_k3s_nginxpm
+sources:
+  - https://github.com/WOOWTECH/Woow_k3s_nginxpm
+  - https://github.com/NginxProxyManager/nginx-proxy-manager
+maintainers:
+  - name: WoowTech
+    url: https://github.com/WOOWTECH

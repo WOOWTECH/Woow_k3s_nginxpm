@@ -1,0 +1,52 @@
+# Default values for the nginxpm chart.
+# Defaults reproduce the original Kustomize deployment 1:1
+# (namespace nginxpm, NodePorts 30080/30443/30081, local-path storage,
+# built-in SQLite database).
+
+namespace:
+  # Create the target namespace as part of the release.
+  # Set to false if the namespace is managed elsewhere.
+  create: true
+  name: nginxpm
+
+nginxpm:
+  image:
+    repository: jc21/nginx-proxy-manager
+    tag: latest
+    # "Always" matches the original manifests' behaviour with the
+    # :latest tag (Kubernetes defaults to Always for :latest).
+    pullPolicy: Always
+
+  service:
+    type: NodePort
+    # HTTP proxy traffic (reverse-proxied hosts).
+    http:
+      port: 80
+      nodePort: 30080
+    # HTTPS proxy traffic (SSL-terminated reverse-proxied hosts).
+    https:
+      port: 443
+      nodePort: 30443
+    # Admin UI (web-based management console).
+    admin:
+      port: 81
+      nodePort: 30081
+
+  persistence:
+    # PVC for NPM configuration, proxy hosts, access lists, and the
+    # built-in SQLite database.
+    data:
+      storageClassName: local-path
+      size: 5Gi
+    # PVC for Let's Encrypt SSL certificates and ACME account data.
+    letsencrypt:
+      storageClassName: local-path
+      size: 1Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

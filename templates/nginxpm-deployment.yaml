@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginxpm
-  namespace: nginxpm
+  namespace: {{ .Values.namespace.name }}
   labels:
     app: nginxpm
 spec:
@@ -12,7 +12,7 @@ spec:
     matchLabels:
       app: nginxpm
   strategy:
-    type: Recreate
+    type: Recreate          # single-writer for the SQLite database
   template:
     metadata:
       labels:
@@ -20,7 +20,8 @@ spec:
     spec:
       containers:
         - name: nginxpm
-          image: jc21/nginx-proxy-manager:latest
+          image: "{{ .Values.nginxpm.image.repository }}:{{ .Values.nginxpm.image.tag }}"
+          imagePullPolicy: {{ .Values.nginxpm.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 80
@@ -37,12 +38,7 @@ spec:
             - name: letsencrypt
               mountPath: /etc/letsencrypt
           resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+            {{- toYaml .Values.nginxpm.resources | nindent 12 }}
           livenessProbe:
             httpGet:
               path: /

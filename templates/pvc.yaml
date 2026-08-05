@@ -1,0 +1,32 @@
+---
+# PVC for NPM data (config, proxy hosts, access lists, SQLite database)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nginxpm-data
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    app: nginxpm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.nginxpm.persistence.data.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.nginxpm.persistence.data.size }}
+---
+# PVC for Let's Encrypt SSL certificates
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nginxpm-letsencrypt
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    app: nginxpm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.nginxpm.persistence.letsencrypt.storageClassName }}
+  resources:
+    requests:
+      storage: {{ .Values.nginxpm.persistence.letsencrypt.size }}
