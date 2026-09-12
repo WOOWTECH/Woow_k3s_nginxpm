@@ -1,0 +1,16 @@
+# This chart has no Secret template and takes no credentials in values.yaml
+# (NPM is configured entirely through its own web UI). Patterns below guard
+# against one being added later. Anchored to the repo root (leading /) on
+# purpose, so a name like "secrets.yaml" can never match something under
+# templates/ and silently drop it from git.
+.env
+.env.*
+*.env
+/secrets.yaml
+/*-secrets.yaml
+/*.secret.yaml
+/*secrets.values.yaml
+/*.local.yaml
+
+# Packaged charts
+*.tgz

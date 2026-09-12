@@ -1,0 +1,100 @@
+name: chart
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+env:
+  KUBECONFORM_VERSION: v0.6.7
+  KUBECONFORM_SHA256: 95f14e87aa28c09d5941f11bd024c1d02fdc0303ccaa23f61cef67bc92619d73
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.19.5
+
+      - name: helm lint
+        run: |
+          helm lint .
+          helm lint . --set namespace.name=ht-nginxpm --set nginxpm.persistence.data.storageClassName=longhorn-delete --set nginxpm.persistence.letsencrypt.storageClassName=longhorn-delete
+
+      - name: helm template (every values combination)
+        run: |
+          mkdir -p /tmp/r
+          helm template nginxpm . -n nginxpm --skip-tests                         > /tmp/r/production.yaml
+          helm template nginxpm . -n nginxpm                                      > /tmp/r/with-tests.yaml
+          helm template nginxpm .                                                 > /tmp/r/default-ns.yaml
+          helm template nginxpm . -n nginxpm --set keepOnUninstall=false          > /tmp/r/no-keep.yaml
+          # The shape of a test install: own namespace, disposable storage.
+          helm template nginxpm . -n ht-nginxpm \
+            --set namespace.name=ht-nginxpm \
+            --set nginxpm.persistence.data.storageClassName=longhorn-delete \
+            --set nginxpm.persistence.letsencrypt.storageClassName=longhorn-delete > /tmp/r/test-install.yaml
+          wc -l /tmp/r/*.yaml
+
+      - name: Every template is tracked and renders
+        run: |
+          # An unanchored .gitignore pattern can silently drop a template from git.
+          for f in $(find templates -type f); do
+            if git check-ignore --no-index -q "$f"; then echo "::error::$f is matched by .gitignore"; exit 1; fi
+          done
+          for f in $(find templates -type f -name '*.yaml' ! -path 'templates/tests/*'); do
+            grep -q "^# Source: nginxpm/$f\$" /tmp/r/*.yaml || { echo "::error::$f never renders"; exit 1; }
+          done
+          grep -rq "^# Source: nginxpm/templates/tests/smoke.yaml\$" /tmp/r/with-tests.yaml /tmp/r/test-install.yaml || { echo "::error::templates/tests/smoke.yaml never renders"; exit 1; }
+          echo "every template is tracked and renders"
+
+      - name: Namespace is never owned when it equals the release namespace
+        run: |
+          python3 - <<'EOF'
+          import sys, yaml
+          bad = []
+          for d in yaml.safe_load_all(open("/tmp/r/production.yaml")):
+              if d and d["kind"] == "Namespace" and d["metadata"]["name"] == "nginxpm":
+                  bad.append("the release namespace must never be rendered when -n matches it")
+          sys.exit("\n".join(bad)) if bad else print("release namespace not rendered")
+          EOF
+
+      - name: kubeconform (schema validation)
+        run: |
+          curl -sSLo /tmp/kc.tgz https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz
+          echo "${KUBECONFORM_SHA256}  /tmp/kc.tgz" | sha256sum -c -
+          tar -xzf /tmp/kc.tgz -C /usr/local/bin kubeconform
+          kubeconform -strict -summary /tmp/r/*.yaml
+
+      - name: Keep policy on the Namespace and both PVCs
+        run: |
+          python3 - <<'EOF'
+          import sys, yaml
+          bad = []
+          for f in ("/tmp/r/default-ns.yaml", "/tmp/r/test-install.yaml"):
+              for d in yaml.safe_load_all(open(f)):
+                  if d and d["kind"] in ("Namespace", "PersistentVolumeClaim"):
+                      if (d["metadata"].get("annotations") or {}).get("helm.sh/resource-policy") != "keep":
+                          bad.append(f"{f}: {d['kind']}/{d['metadata']['name']} has no keep policy")
+          for d in yaml.safe_load_all(open("/tmp/r/no-keep.yaml")):
+              if d and d["kind"] in ("Namespace", "PersistentVolumeClaim"):
+                  if (d["metadata"].get("annotations") or {}).get("helm.sh/resource-policy") == "keep":
+                      bad.append(f"keepOnUninstall=false must drop the keep policy on {d['kind']}/{d['metadata']['name']}")
+          sys.exit("\n".join(bad)) if bad else print("keep policy present and togglable")
+          EOF
+
+      - name: No secret committed
+        run: |
+          # This chart has no Secret template and no credentials in values;
+          # NPM is configured entirely through its own web UI. Guard against
+          # one being added without the usual placeholder discipline.
+          if grep -riE "(password|token|api[_-]?key)\s*[:=]\s*['\"]?[A-Za-z0-9+/=_-]{8,}" values.yaml; then
+            echo "::error::values.yaml appears to contain a real credential"; exit 1
+          fi
+          if find . -name '*.env' -o -name '*.secret.yaml' | grep -q .; then
+            echo "::error::a secret-shaped file is committed"; exit 1
+          fi
+          echo "no secrets committed"
