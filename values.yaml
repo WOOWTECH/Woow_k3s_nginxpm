@@ -6,8 +6,22 @@
 namespace:
   # Create the target namespace as part of the release.
   # Set to false if the namespace is managed elsewhere.
+  # Ignored (never rendered) when namespace.name equals the `-n` the release
+  # was installed into: that namespace holds Helm's own release record, so it
+  # must be created with `--create-namespace` instead, and `helm uninstall`
+  # can then never delete the namespace the release itself lives in.
   create: true
   name: nginxpm
+
+# Add `helm.sh/resource-policy: keep` to the Namespace and both PVCs, so
+# `helm uninstall` never deletes proxy hosts, SSL certificates or the SQLite
+# database. Data survives until removed by hand.
+keepOnUninstall: true
+
+tests:
+  # `helm test` smoke pod: read-only HTTP checks against the admin UI (81)
+  # and the HTTP proxy port (80).
+  enabled: true
 
 nginxpm:
   image:

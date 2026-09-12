@@ -1,0 +1,45 @@
+{{- /*
+`helm test` smoke pod, read-only: confirms the admin UI (81) and the HTTP
+proxy port (80) both respond over the Service. NPM's own image ships neither
+curl nor python, so this uses a small pinned curl image instead.
+*/ -}}
+{{- if .Values.tests.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}-smoke
+  namespace: {{ include "nginxpm.ns" . }}
+  labels:
+    app: nginxpm
+    app.kubernetes.io/component: smoke-test
+  annotations:
+    helm.sh/hook: test
+    # Kept until the next `helm test` so `helm test --logs` can always read it.
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  restartPolicy: Never
+  containers:
+    - name: smoke
+      image: curlimages/curl:8.10.1
+      command: [sh, -c]
+      args:
+        - |
+          set -eu
+          check() {
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$1")
+            echo "$1 -> HTTP $code"
+            # Any HTTP response (including 4xx from an unconfigured proxy
+            # host) proves the port is up; only 000 (no connection) fails.
+            [ "$code" != "000" ]
+          }
+          check "http://nginxpm:81/"
+          check "http://nginxpm:80/"
+          echo "SMOKE OK"
+      resources:
+        requests:
+          cpu: 10m
+          memory: 32Mi
+        limits:
+          cpu: 200m
+          memory: 64Mi
+{{- end }}

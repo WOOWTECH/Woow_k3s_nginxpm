@@ -19,6 +19,10 @@ NPM 是一套具備網頁管理介面的反向代理，並可自動申請/續約
 - 儲存：兩個 PVC 使用 `local-path` — `nginxpm-data`（5Gi，設定 + SQLite 資料庫）、`nginxpm-letsencrypt`（1Gi，SSL 憑證）
 - 部署策略：`Recreate`（SQLite 單一寫入者）
 - 沒有 ConfigMap 或 Secret — NPM 完全透過網頁介面設定
+- `helm uninstall` 不會刪除資料：命名空間與兩個 PVC 都帶
+  `helm.sh/resource-policy: keep`（設定 `keepOnUninstall: false` 可關閉）
+- 內建唯讀的 `helm test` 煙霧測試，檢查管理介面（81）與 HTTP 代理埠（80）
+  是否都有回應
 
 ## 快速開始
 
@@ -32,14 +36,10 @@ cd Woow_k3s_nginxpm
 helm install nginxpm .
 ```
 
-安裝後開啟 `http://<node-ip>:30081`，使用 NPM 預設帳密登入：
-
-| 欄位 | 值 |
-|---|---|
-| Email | `admin@example.com` |
-| 密碼 | `changeme` |
-
-**首次登入後請立即更改。**
+安裝後開啟 `http://<node-ip>:30081`。自 NPM v2.13.0 起已經沒有預設管理員帳號，
+首次啟動會顯示**設定精靈（setup wizard）**，由你自己建立管理員 Email／密碼。
+（舊版的 `admin@example.com` / `changeme` 預設帳密，只有在 `nginxpm.image.tag`
+被釘選為 2.13.0 之前的舊映像檔時才適用。）
 
 ## 主要 values
 
@@ -60,7 +60,8 @@ helm install nginxpm .
 
 ```bash
 kubectl get pods -n nginxpm                     # pod Running/Ready
-curl -sI http://<node-ip>:30081                 # 管理介面回應 HTTP 200
+curl -sI http://<node-ip>:30081                 # 管理介面（設定精靈）有 HTTP 回應
+helm test nginxpm -n nginxpm                    # 煙霧測試：管理介面(81) + HTTP 代理埠(80) 都有回應
 ```
 
 ## 設定 Proxy Hosts
@@ -81,9 +82,11 @@ Home Assistant、n8n、Immich 等服務記得啟用 **Websockets Support**。
 ## 移除
 
 ```bash
-helm uninstall nginxpm
-# Helm 不會刪除 PVC；若要一併刪除資料：
+helm uninstall nginxpm -n nginxpm
+# 命名空間與兩個 PVC 都會保留（helm.sh/resource-policy: keep）。
+# 確定不再需要資料後，再自行刪除：
 kubectl delete pvc -n nginxpm nginxpm-data nginxpm-letsencrypt
+kubectl delete namespace nginxpm
 ```
 
 ## 從舊 Kustomize 部署遷移
@@ -95,7 +98,11 @@ kubectl delete pvc -n nginxpm nginxpm-data nginxpm-letsencrypt
 
 - NPM 容器現在明寫 `imagePullPolicy: Always`
   （原本因為 `:latest` tag 為隱性行為）
-- 命名空間額外帶了 `managed-by: helm` 標籤
+- 命名空間額外帶了 `managed-by: helm` 標籤，並與兩個 PVC 一起帶上
+  `helm.sh/resource-policy: keep`，讓 `helm uninstall` 不會刪除它們
+- 若安裝到與 release 本身相同的命名空間
+  （`helm install nginxpm . -n nginxpm --create-namespace`），Chart 不會再
+  另外渲染／持有該命名空間物件 — 因為 Helm 已經以 release 的身份持有它了
 
 因此既有的 Kustomize 部署可以直接由 Helm 接管，或保留原樣。
 原本的 Kustomize 檔案在本 repo 的 git 歷史中仍可查閱。

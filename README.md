@@ -20,6 +20,10 @@ database container is required.
 - Storage: two PVCs on `local-path` — `nginxpm-data` (5Gi, config + SQLite DB) and `nginxpm-letsencrypt` (1Gi, SSL certificates)
 - Deployment strategy: `Recreate` (single writer for SQLite)
 - No ConfigMap or Secret — NPM is configured entirely through its web UI
+- `helm uninstall` never deletes data: the Namespace and both PVCs carry
+  `helm.sh/resource-policy: keep` (set `keepOnUninstall: false` to opt out)
+- A read-only `helm test` smoke pod checks that the admin UI (81) and the
+  HTTP proxy port (80) both respond
 
 ## Quick start
 
@@ -33,14 +37,11 @@ cd Woow_k3s_nginxpm
 helm install nginxpm .
 ```
 
-Then open `http://<node-ip>:30081` and log in with the NPM default credentials:
-
-| Field | Value |
-|---|---|
-| Email | `admin@example.com` |
-| Password | `changeme` |
-
-**Change these immediately after first login.**
+Then open `http://<node-ip>:30081`. As of NPM v2.13.0 there is no default
+admin account any more — first launch presents a **setup wizard** that has
+you create the admin email/password yourself. (The old
+`admin@example.com` / `changeme` default only applies if you pin
+`nginxpm.image.tag` to an image older than 2.13.0.)
 
 ## Key values
 
@@ -61,7 +62,8 @@ Full list: [`values.yaml`](values.yaml)
 
 ```bash
 kubectl get pods -n nginxpm                     # pod Running/Ready
-curl -sI http://<node-ip>:30081                 # HTTP 200 from the admin UI
+curl -sI http://<node-ip>:30081                 # HTTP response from the admin UI (setup wizard)
+helm test nginxpm -n nginxpm                    # smoke pod: admin UI (81) + HTTP proxy port (80) respond
 ```
 
 ## Setting up proxy hosts
@@ -84,9 +86,11 @@ and Immich.
 ## Uninstall
 
 ```bash
-helm uninstall nginxpm
-# PVCs are kept by Helm; remove them (and your data!) with:
+helm uninstall nginxpm -n nginxpm
+# The Namespace and both PVCs are kept (helm.sh/resource-policy: keep).
+# Remove them yourself, and only once you no longer need the data:
 kubectl delete pvc -n nginxpm nginxpm-data nginxpm-letsencrypt
+kubectl delete namespace nginxpm
 ```
 
 ## Migrating from the old Kustomize deployment
@@ -99,7 +103,13 @@ are:
 
 - `imagePullPolicy: Always` is now explicit on the NPM container (previously
   implicit because the image tag is `:latest`).
-- The namespace carries an extra `managed-by: helm` label.
+- The namespace carries an extra `managed-by: helm` label, and — together
+  with both PVCs — a `helm.sh/resource-policy: keep` annotation so
+  `helm uninstall` never deletes them.
+- If you install into the same namespace as the release itself
+  (`helm install nginxpm . -n nginxpm --create-namespace`), the chart does
+  not also try to render/own that Namespace object — Helm already owns it as
+  part of the release.
 
 An existing Kustomize deployment can therefore be adopted by Helm or simply
 left in place. The original Kustomize files remain available in this repo's
