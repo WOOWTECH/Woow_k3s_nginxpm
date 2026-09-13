@@ -5,7 +5,7 @@ description: >-
   automatic Let's Encrypt SSL certificate management. Uses built-in SQLite,
   no external database required.
 type: application
-version: 1.1.0
+version: 1.2.0
 appVersion: "latest"
 kubeVersion: ">=1.24.0-0"
 keywords:

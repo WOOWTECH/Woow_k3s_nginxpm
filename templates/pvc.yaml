@@ -4,7 +4,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: nginxpm-data
-  namespace: {{ .Values.namespace.name }}
+  namespace: {{ include "nginxpm.ns" . }}
   labels:
     app: nginxpm
   {{- include "nginxpm.keepAnnotations" . | nindent 2 }}
@@ -21,7 +21,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: nginxpm-letsencrypt
-  namespace: {{ .Values.namespace.name }}
+  namespace: {{ include "nginxpm.ns" . }}
   labels:
     app: nginxpm
   {{- include "nginxpm.keepAnnotations" . | nindent 2 }}
