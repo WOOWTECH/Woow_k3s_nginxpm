@@ -3,12 +3,12 @@ Namespaces. One that equals the release namespace is skipped: Helm keeps its
 release record there, so it is created with --create-namespace instead and
 can never be deleted (or otherwise owned) by this chart via `helm uninstall`.
 */ -}}
-{{- if and .Values.namespace.create (ne .Values.namespace.name .Release.Namespace) }}
+{{- if and .Values.namespace.create (ne (include "nginxpm.ns" .) .Release.Namespace) }}
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: {{ .Values.namespace.name }}
+  name: {{ include "nginxpm.ns" . }}
   labels:
     app: nginxpm
     managed-by: helm

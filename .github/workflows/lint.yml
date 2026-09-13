@@ -37,6 +37,11 @@ jobs:
             --set namespace.name=ht-nginxpm \
             --set nginxpm.persistence.data.storageClassName=longhorn-delete \
             --set nginxpm.persistence.letsencrypt.storageClassName=longhorn-delete > /tmp/r/test-install.yaml
+            # namespace.name defaults to "" so `-n` wins, which means the Namespace
+            # object is never rendered by the combinations above (a release cannot own
+            # the namespace it lives in). Render it explicitly, or the "every template
+            # renders" guard below fails on templates/namespace.yaml.
+            helm template nginxpm . -n release-ns --set namespace.create=true --set namespace.name=nginxpm-elsewhere  > /tmp/r/other-ns.yaml
           wc -l /tmp/r/*.yaml
 
       - name: Every template is tracked and renders
@@ -98,3 +103,28 @@ jobs:
             echo "::error::a secret-shaped file is committed"; exit 1
           fi
           echo "no secrets committed"
+
+      - name: "-n controls object placement (namespace footgun)"
+        run: |
+          # A values-file `namespace.name` that silently beats `-n` is how a
+          # rehearsal once wrote Helm ownership annotations onto a live
+          # production Deployment. Every object must land in the namespace
+          # given by -n when namespace.name is left at its empty default.
+          got=$(helm template t . -n SENTINEL --skip-tests  | grep "^  namespace:" | sort -u)
+          if [ "$got" != "  namespace: SENTINEL" ]; then
+            echo "::error::. ignores -n: $got"; exit 1
+          fi
+          echo "-n controls placement for every chart"
+
+      - name: namespace.name must default to empty
+        run: |
+          python3 - <<'EOF'
+          import sys, yaml, glob
+          bad = []
+          for f in glob.glob("**/values.yaml", recursive=True):
+              v = yaml.safe_load(open(f)) or {}
+              n = (v.get("namespace") or {})
+              if isinstance(n, dict) and n.get("name"):
+                  bad.append(f"{f}: namespace.name defaults to {n['name']!r}; it must be \"\" so -n wins")
+          sys.exit("\n".join(bad)) if bad else print("namespace.name defaults are empty")
+          EOF

@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: nginxpm
-  namespace: {{ .Values.namespace.name }}
+  namespace: {{ include "nginxpm.ns" . }}
   labels:
     app: nginxpm
 spec:

@@ -11,7 +11,11 @@ namespace:
   # must be created with `--create-namespace` instead, and `helm uninstall`
   # can then never delete the namespace the release itself lives in.
   create: true
-  name: nginxpm
+  # EMPTY BY DEFAULT so `-n` controls placement. A non-empty value here
+  # silently overrides `-n`, which is how a rehearsal once wrote Helm ownership
+  # annotations onto a live production Deployment. Set it only when you
+  # deliberately want objects somewhere other than the release namespace.
+  name: ""
 
 # Add `helm.sh/resource-policy: keep` to the Namespace and both PVCs, so
 # `helm uninstall` never deletes proxy hosts, SSL certificates or the SQLite
