@@ -37,6 +37,11 @@ jobs:
             --set namespace.name=ht-nginxpm \
             --set nginxpm.persistence.data.storageClassName=longhorn-delete \
             --set nginxpm.persistence.letsencrypt.storageClassName=longhorn-delete > /tmp/r/test-install.yaml
+            # namespace.name defaults to "" so `-n` wins, which means the Namespace
+            # object is never rendered by the combinations above (a release cannot own
+            # the namespace it lives in). Render it explicitly, or the "every template
+            # renders" guard below fails on templates/namespace.yaml.
+            helm template nginxpm . -n release-ns --set namespace.create=true --set namespace.name=nginxpm-elsewhere  > /tmp/r/other-ns.yaml
           wc -l /tmp/r/*.yaml
 
       - name: Every template is tracked and renders
