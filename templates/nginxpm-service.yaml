@@ -2,15 +2,23 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginxpm
+  name: {{ include "nginxpm.name" . }}
   namespace: {{ include "nginxpm.ns" . }}
   labels:
-    app: nginxpm
+    app: {{ include "nginxpm.name" . }}
 spec:
   type: {{ .Values.nginxpm.service.type }}
   selector:
-    app: nginxpm
+    app: {{ include "nginxpm.name" . }}
   ports:
+  {{- if .Values.nginxpm.service.ports }}
+  {{- /*
+  Explicit port list, verbatim. The second live instance publishes only two
+  ports (no HTTPS) and names the admin one differently, which the three fixed
+  blocks below cannot express.
+  */}}
+    {{- toYaml .Values.nginxpm.service.ports | nindent 4 }}
+  {{- else }}
     - name: http
       port: {{ .Values.nginxpm.service.http.port }}
       targetPort: http
@@ -32,3 +40,4 @@ spec:
       nodePort: {{ .Values.nginxpm.service.admin.nodePort }}
       {{- end }}
       protocol: TCP
+  {{- end }}

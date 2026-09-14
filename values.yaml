@@ -27,7 +27,49 @@ tests:
   # and the HTTP proxy port (80).
   enabled: true
 
+# Name of the Deployment, Service, both PVCs, the pod label and the SELECTOR.
+# The selector is immutable on a live Deployment, so this must match whatever is
+# already running: the instance in namespace `nginxpm` is called `nginxpm`, the
+# one in `pi-agent-woow` is called `npm`.
+baseName: nginxpm
+
 nginxpm:
+  # Container name inside the pod. Defaults to baseName.
+  containerName: ""
+  # null leaves the field unset (what the nginxpm instance has); the
+  # pi-agent-woow instance sets it to false and that is part of its pod template.
+  automountServiceAccountToken: null
+  # Env on the container. The pi-agent-woow instance sets DISABLE_IPV6.
+  env: []
+  # Container ports. NAMES and ORDER are part of the pod template, and the two
+  # live instances differ on both, so this is data rather than fixed template.
+  ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+    - name: https
+      containerPort: 443
+      protocol: TCP
+    - name: admin-ui
+      containerPort: 81
+      protocol: TCP
+  # Probes, verbatim. Defaults reproduce the original nginxpm manifests.
+  livenessProbe:
+    httpGet:
+      path: /
+      port: admin-ui
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 5
+  readinessProbe:
+    httpGet:
+      path: /
+      port: admin-ui
+    initialDelaySeconds: 15
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
   image:
     repository: jc21/nginx-proxy-manager
     tag: latest
@@ -37,6 +79,10 @@ nginxpm:
 
   service:
     type: NodePort
+    # Explicit Service port list. Empty keeps the original three-port shape
+    # built from http/https/admin below; set it when an instance publishes a
+    # different set (the pi-agent-woow one has no HTTPS port).
+    ports: []
     # HTTP proxy traffic (reverse-proxied hosts).
     http:
       port: 80

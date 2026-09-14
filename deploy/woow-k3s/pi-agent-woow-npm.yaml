@@ -1,0 +1,101 @@
+# Instance values for the `npm` deployment in namespace pi-agent-woow.
+#
+# This is the SECOND instance of this chart. It predates the chart and was
+# applied with kubectl, so every field below was read off the live object -
+# the goal is a takeover that changes nothing and restarts nothing.
+#
+# It differs from the `nginxpm` instance in more than its name: no HTTPS
+# Service port, a different admin port name, a different container port ORDER,
+# a pinned image tag, DISABLE_IPV6, and its own probe timings.
+#
+# SAFETY: never set `namespace:` here - placement is `-n` only.
+
+# The namespace already exists and holds seven other releases.
+namespace:
+  create: false
+
+# The live PVCs (npm-data, npm-letsencrypt) already hold the proxy hosts and
+# the Let's Encrypt account, so they must survive an uninstall.
+keepOnUninstall: true
+
+# Deployment / Service / PVC names and the immutable pod selector.
+baseName: npm
+
+nginxpm:
+  containerName: npm
+  # Part of the live pod template; the nginxpm instance leaves it unset.
+  automountServiceAccountToken: false
+
+  image:
+    repository: docker.io/jc21/nginx-proxy-manager
+    # Pinned, unlike the nginxpm instance which floats on :latest.
+    tag: 2.13.5
+    pullPolicy: IfNotPresent
+
+  env:
+    - name: DISABLE_IPV6
+      value: "true"
+
+  # Live order is http, admin, https - not the chart default order.
+  ports:
+    - name: http
+      containerPort: 80
+      protocol: TCP
+    - name: admin
+      containerPort: 81
+      protocol: TCP
+    - name: https
+      containerPort: 443
+      protocol: TCP
+
+  # Probes target port 81 numerically, not by name, and wait far longer to
+  # start than the chart default.
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 81
+      scheme: HTTP
+    initialDelaySeconds: 90
+    periodSeconds: 30
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 5
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 81
+      scheme: HTTP
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 6
+
+  service:
+    type: ClusterIP
+    # Only two ports live: HTTPS is not published on this instance.
+    ports:
+      - name: http
+        port: 80
+        targetPort: 80
+        protocol: TCP
+      - name: admin
+        port: 81
+        targetPort: 81
+        protocol: TCP
+
+  persistence:
+    data:
+      storageClassName: longhorn
+      size: 2Gi
+    letsencrypt:
+      storageClassName: longhorn
+      size: 1Gi
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
