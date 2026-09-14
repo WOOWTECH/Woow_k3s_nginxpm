@@ -16,6 +16,17 @@ other than the release namespace, and never in an instance-values file.
 {{ .Values.namespace.name | default .Release.Namespace }}
 {{- end -}}
 
+{{/*
+Base name for every object: the Deployment, the Service, both PVCs, the pod
+label and the selector. Fixed per instance rather than derived from the release
+name, because the selector is immutable on a live Deployment and existing Proxy
+Hosts reference the Service by this exact name. A second instance of this chart
+runs as `npm` in another namespace, which is why this is a value at all.
+*/}}
+{{- define "nginxpm.name" -}}
+{{ .Values.baseName }}
+{{- end -}}
+
 {{/* `annotations:` block with the keep policy, or nothing. */}}
 {{- define "nginxpm.keepAnnotations" -}}
 {{- if .Values.keepOnUninstall -}}

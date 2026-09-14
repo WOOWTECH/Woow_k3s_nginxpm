@@ -2,36 +2,40 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginxpm
+  name: {{ include "nginxpm.name" . }}
   namespace: {{ include "nginxpm.ns" . }}
   labels:
-    app: nginxpm
+    app: {{ include "nginxpm.name" . }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: nginxpm
+      app: {{ include "nginxpm.name" . }}
   strategy:
     type: Recreate          # single-writer for the SQLite database
   template:
     metadata:
       labels:
-        app: nginxpm
+        app: {{ include "nginxpm.name" . }}
     spec:
+      {{- if not (kindIs "invalid" .Values.nginxpm.automountServiceAccountToken) }}
+      automountServiceAccountToken: {{ .Values.nginxpm.automountServiceAccountToken }}
+      {{- end }}
       containers:
-        - name: nginxpm
+        - name: {{ .Values.nginxpm.containerName | default (include "nginxpm.name" .) }}
           image: "{{ .Values.nginxpm.image.repository }}:{{ .Values.nginxpm.image.tag }}"
           imagePullPolicy: {{ .Values.nginxpm.image.pullPolicy }}
+          {{- with .Values.nginxpm.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- /*
+          Port NAMES and their ORDER are part of the pod template, so a takeover
+          that renames or reorders them restarts the pod even though nothing
+          about the container changed. The live instances disagree on both.
+          */}}
           ports:
-            - name: http
-              containerPort: 80
-              protocol: TCP
-            - name: https
-              containerPort: 443
-              protocol: TCP
-            - name: admin-ui
-              containerPort: 81
-              protocol: TCP
+            {{- toYaml .Values.nginxpm.ports | nindent 12 }}
           volumeMounts:
             - name: data
               mountPath: /data
@@ -40,25 +44,13 @@ spec:
           resources:
             {{- toYaml .Values.nginxpm.resources | nindent 12 }}
           livenessProbe:
-            httpGet:
-              path: /
-              port: admin-ui
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 5
+            {{- toYaml .Values.nginxpm.livenessProbe | nindent 12 }}
           readinessProbe:
-            httpGet:
-              path: /
-              port: admin-ui
-            initialDelaySeconds: 15
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
+            {{- toYaml .Values.nginxpm.readinessProbe | nindent 12 }}
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: nginxpm-data
+            claimName: {{ include "nginxpm.name" . }}-data
         - name: letsencrypt
           persistentVolumeClaim:
-            claimName: nginxpm-letsencrypt
+            claimName: {{ include "nginxpm.name" . }}-letsencrypt
